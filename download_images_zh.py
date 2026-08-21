@@ -3,7 +3,7 @@ import re
 import json
 import hashlib
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, unquote
 from urllib.request import Request, urlopen
 
 # 匹配 markdown 图片语法 ![alt](https://...)
@@ -143,31 +143,117 @@ def is_image_data(data):
     return False
 
 
+def extract_baidu_original_url(url):
+    """从百度图床链接中提取 src 参数指向的原始图片链接，失败返回 None
+
+    支持的格式示例：
+      https://gimg2.baidu.com/image_search/src=http%3A%2F%2Fxxx.png%3F...&refer=...
+      https://...baidu.com/...?src=http%3A%2F%2Fxxx.png&...
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or '').lower()
+    if 'baidu.com' not in host:
+        return None
+
+    # 形式1：src= 在 URL 的 query string 中
+    qs_src = None
+    if parsed.query:
+        try:
+            qs = parse_qs(parsed.query, keep_blank_values=True)
+            qs_src_list = qs.get('src') or qs.get('srcUrl') or qs.get('src_url')
+            if qs_src_list:
+                qs_src = qs_src_list[0]
+        except Exception:
+            qs_src = None
+
+    # 形式2：src= 嵌在 path 中，如 /image_search/src=<encoded>&refer=...
+    path_src = None
+    path = parsed.path or ''
+    # 找到 'src=' 的起始位置（在 path 中）
+    idx = path.find('src=')
+    if idx >= 0:
+        rest = path[idx + 4:]           # 去掉 "src=" 前缀
+        # 截到下一个 '&' 或 '?' 或 '#' 或结尾
+        end = len(rest)
+        for sep in ('&', '?', '#'):
+            pos = rest.find(sep)
+            if 0 <= pos < end:
+                end = pos
+        path_src = rest[:end] if end > 0 else None
+
+    # 优先使用 path 中的 src（因为百度图床常用这种形式），其次用 query 中的
+    encoded = path_src if path_src else qs_src
+    if not encoded:
+        return None
+    try:
+        decoded = unquote(encoded)
+    except Exception:
+        decoded = encoded
+    # 如果解码后仍然看起来像带 % 的未完全解码的 url，再解一次
+    try:
+        if '%' in decoded:
+            decoded2 = unquote(decoded)
+            if decoded2 and decoded2 != decoded:
+                decoded = decoded2
+    except Exception:
+        pass
+    if decoded and (decoded.startswith('http://') or decoded.startswith('https://')):
+        return decoded
+    return None
+
+
 def download_image(url, assets_dir, cfg):
-    """下载单个图片到指定 assets_dir，返回本地文件名（不含目录）"""
+    """下载单个图片到指定 assets_dir，返回本地文件名（不含目录）
+
+    若 url 为百度图床链接且下载失败（或返回的不是图片数据），则自动解析 src= 指向的
+    原始图片链接并再次尝试下载（两者之一成功即视为成功）。
+    """
     filename = unique_filename(url)
     filepath = os.path.join(assets_dir, filename)
     if os.path.exists(filepath):
         print(f'已存在，跳过: {filename}')
         return filename
 
-    headers = build_headers_for(url, cfg)
+    # 若为百度图床链接，提前提取原始链接以便失败回退
+    fallback_url = extract_baidu_original_url(url)
 
-    try:
-        req = Request(url, headers=headers)
-        with urlopen(req, timeout=30) as resp:
-            data = resp.read()
-        # 校验响应数据是否真的是图片，防止把 HTML 错误页（如百度 404 页）当图片保存
-        if not is_image_data(data):
-            print(f'下载失败: {url}  错误: 响应内容不是图片（可能是失效链接或错误页）')
-            return None
-        with open(filepath, 'wb') as f:
-            f.write(data)
-        print(f'下载成功: {url} -> {filepath} ({len(data)} bytes)')
-        return filename
-    except Exception as e:
-        print(f'下载失败: {url}  错误: {e}')
-        return None
+    # 尝试下载：先原始 url（百度图床链接），失败则尝试 fallback（src 解码后的真实链接）
+    attempts = [url]
+    if fallback_url and fallback_url != url:
+        attempts.append(fallback_url)
+
+    last_error = None
+    for idx, attempt_url in enumerate(attempts):
+        headers = build_headers_for(attempt_url, cfg)
+        try:
+            req = Request(attempt_url, headers=headers)
+            with urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            # 校验响应数据是否真的是图片，防止把 HTML 错误页（如百度 404 页）当图片保存
+            if not is_image_data(data):
+                msg = '响应内容不是图片（可能是失效链接或错误页）'
+                print(f'下载失败: {attempt_url}  错误: {msg}')
+                last_error = msg
+                continue  # 尝试下一个 fallback
+            with open(filepath, 'wb') as f:
+                f.write(data)
+            if idx == 0:
+                print(f'下载成功: {attempt_url} -> {filepath} ({len(data)} bytes)')
+            else:
+                print(f'百度图床链接失效，已回退并下载原始链接: {attempt_url} -> {filepath} ({len(data)} bytes)')
+            return filename
+        except Exception as e:
+            last_error = str(e)
+            print(f'下载失败: {attempt_url}  错误: {e}')
+            # 继续尝试 fallback（如有）
+            continue
+
+    # 所有尝试均失败
+    if fallback_url:
+        print(f'百度图床链接及其原始链接均下载失败: {url} (原始: {fallback_url})')
+    else:
+        print(f'下载失败: {url}  错误: {last_error}')
+    return None
 
 
 def collect_md_files_in_dir(directory):

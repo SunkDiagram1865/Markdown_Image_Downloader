@@ -3,7 +3,7 @@ import re
 import json
 import hashlib
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, unquote
 from urllib.request import Request, urlopen
 
 # Match markdown image syntax ![alt](https://...)
@@ -143,31 +143,115 @@ def is_image_data(data):
     return False
 
 
+def extract_baidu_original_url(url):
+    """Extract the original image URL from the src= param of a Baidu image-bed link.
+
+    Returns None if the URL is not a Baidu image link or no src value can be decoded.
+
+    Supported patterns:
+      https://gimg2.baidu.com/image_search/src=http%3A%2F%2Fxxx.png%3F...&refer=...
+      https://...baidu.com/...?src=http%3A%2F%2Fxxx.png&...
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or '').lower()
+    if 'baidu.com' not in host:
+        return None
+
+    # Form 1: src= lives in the query string
+    qs_src = None
+    if parsed.query:
+        try:
+            qs = parse_qs(parsed.query, keep_blank_values=True)
+            qs_src_list = qs.get('src') or qs.get('srcUrl') or qs.get('src_url')
+            if qs_src_list:
+                qs_src = qs_src_list[0]
+        except Exception:
+            qs_src = None
+
+    # Form 2: src= is embedded inside the path, e.g. /image_search/src=<encoded>&refer=...
+    path_src = None
+    path = parsed.path or ''
+    idx = path.find('src=')
+    if idx >= 0:
+        rest = path[idx + 4:]
+        end = len(rest)
+        for sep in ('&', '?', '#'):
+            pos = rest.find(sep)
+            if 0 <= pos < end:
+                end = pos
+        path_src = rest[:end] if end > 0 else None
+
+    encoded = path_src if path_src else qs_src
+    if not encoded:
+        return None
+    try:
+        decoded = unquote(encoded)
+    except Exception:
+        decoded = encoded
+    # If it still looks percent-encoded, decode one more time
+    try:
+        if '%' in decoded:
+            decoded2 = unquote(decoded)
+            if decoded2 and decoded2 != decoded:
+                decoded = decoded2
+    except Exception:
+        pass
+    if decoded and (decoded.startswith('http://') or decoded.startswith('https://')):
+        return decoded
+    return None
+
+
 def download_image(url, assets_dir, cfg):
-    """Download a single image to assets_dir; return the local filename (without directory)."""
+    """Download a single image to assets_dir; return the local filename (without directory).
+
+    If url is a Baidu image-bed link and the download fails (or the response isn't image data),
+    the function automatically parses the src= fallback URL and retries with the original source.
+    Success on either attempt counts as a successful download.
+    """
     filename = unique_filename(url)
     filepath = os.path.join(assets_dir, filename)
     if os.path.exists(filepath):
         print(f'Already exists, skipped: {filename}')
         return filename
 
-    headers = build_headers_for(url, cfg)
+    # If this looks like a Baidu image-bed link, pre-extract the original src for fallback
+    fallback_url = extract_baidu_original_url(url)
 
-    try:
-        req = Request(url, headers=headers)
-        with urlopen(req, timeout=30) as resp:
-            data = resp.read()
-        # Verify the response is actually an image (avoid saving HTML error pages like Baidu 404)
-        if not is_image_data(data):
-            print(f'Failed: {url}  error: response is not an image (likely a dead link or error page)')
-            return None
-        with open(filepath, 'wb') as f:
-            f.write(data)
-        print(f'Downloaded: {url} -> {filepath} ({len(data)} bytes)')
-        return filename
-    except Exception as e:
-        print(f'Failed: {url}  error: {e}')
-        return None
+    attempts = [url]
+    if fallback_url and fallback_url != url:
+        attempts.append(fallback_url)
+
+    last_error = None
+    for idx, attempt_url in enumerate(attempts):
+        headers = build_headers_for(attempt_url, cfg)
+        try:
+            req = Request(attempt_url, headers=headers)
+            with urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            # Verify the response is actually an image (avoid saving HTML error pages like Baidu 404)
+            if not is_image_data(data):
+                msg = 'response is not an image (likely a dead link or error page)'
+                print(f'Failed: {attempt_url}  error: {msg}')
+                last_error = msg
+                continue  # try the next fallback
+            with open(filepath, 'wb') as f:
+                f.write(data)
+            if idx == 0:
+                print(f'Downloaded: {attempt_url} -> {filepath} ({len(data)} bytes)')
+            else:
+                print(f'Baidu image-bed link unreachable, fell back to original: {attempt_url} -> {filepath} ({len(data)} bytes)')
+            return filename
+        except Exception as e:
+            last_error = str(e)
+            print(f'Failed: {attempt_url}  error: {e}')
+            continue
+
+    # All attempts exhausted
+    if fallback_url:
+        print(f'Both Baidu image-bed link and its original URL failed: {url} (original: {fallback_url})')
+    else:
+        print(f'Failed: {url}  error: {last_error}')
+    return None
 
 
 def collect_md_files_in_dir(directory):
