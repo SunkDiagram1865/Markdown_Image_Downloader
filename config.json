@@ -1,11 +1,19 @@
 {
-    "_说明": "请求头与 Cookie 配置文件。本文件被 download_images.py 自动读取。",
+    "_说明": "请求头与 Cookie 配置文件。本文件被 download_images_zh.py / download_images_en.py 自动读取。",
+    "_description_en": "Headers and cookies configuration. Auto-loaded by download_images_zh.py / download_images_en.py.",
     "_用法": [
         "1. headers: 对所有请求生效的通用请求头（User-Agent 默认已设置，可在此覆盖）",
         "2. cookies: 对所有请求生效的 Cookie，格式为 'key1=val1; key2=val2'",
         "3. per_host: 按域名定制请求头和 Cookie，会覆盖通用设置（如新浪图床的 Referer）",
         "4. 字段均可留空，不影响程序运行",
         "5. 修改本文件后无需重启，下次下载时自动重新读取"
+    ],
+    "_usage_en": [
+        "1. headers: common request headers applied to all requests (User-Agent is set by default; override here)",
+        "2. cookies: common cookie string applied to all requests, format: 'key1=val1; key2=val2'",
+        "3. per_host: per-host headers and cookies, override the common settings (e.g. Referer for Sina image bed)",
+        "4. All fields can be left empty; the program still runs",
+        "5. No restart needed after editing; the config is re-read on the next download"
     ],
 
     "headers": {

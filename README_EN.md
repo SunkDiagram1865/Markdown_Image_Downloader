@@ -4,6 +4,8 @@ English | [简体中文](./README.md)
 
 Interactive tool that scans Markdown documents for `![alt](https://...)` image links, downloads them to a local `./assets` directory, and optionally rewrites the links to local paths.
 
+> Main program language: [English download_images_en.py](./download_images_en.py) | [Chinese download_images_zh.py](./download_images_zh.py)
+
 ## Features
 
 - Interactive menu: process a single file, a folder (recursive), or rewrite links
@@ -22,8 +24,16 @@ Interactive tool that scans Markdown documents for `![alt](https://...)` image l
 
 ## Usage
 
+English version:
+
 ```bash
-python download_images.py
+python download_images_en.py
+```
+
+Chinese version:
+
+```bash
+python download_images_zh.py
 ```
 
 The menu appears on launch:
@@ -34,7 +44,7 @@ The menu appears on launch:
 2. Specify folder     (recursive scan)
 3. Replace https links with ./assets paths (no download)
 0. Exit
-==========================================
+==============================================
 ```
 
 ### Option 1: Specify file(s)
@@ -91,7 +101,8 @@ After running option 3:
 
 ## Files
 
-- `download_images.py` — main program
-- `config.json` — headers and cookies configuration
+- `download_images_en.py` — main program (English)
+- `download_images_zh.py` — main program (Chinese)
+- `config.json` — headers and cookies configuration (bilingual comments)
 - `failed_urls.txt` — failed download log (generated at runtime)
 - `assets/` — image output directory (auto-created next to each md file)

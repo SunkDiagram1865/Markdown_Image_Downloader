@@ -4,6 +4,8 @@
 
 交互式工具，扫描 Markdown 文档中的 `![alt](https://...)` 图片链接，下载到 `./assets` 目录，可选把链接替换为本地路径。
 
+> 主程序语言：[中文版 download_images_zh.py](./download_images_zh.py) | [英文版 download_images_en.py](./download_images_en.py)
+
 ## 功能
 
 - 交互式菜单：选择处理单个文件、文件夹（递归嵌套子目录），或替换链接
@@ -22,8 +24,16 @@
 
 ## 使用方法
 
+中文版：
+
 ```bash
-python download_images.py
+python download_images_zh.py
+```
+
+英文版：
+
+```bash
+python download_images_en.py
 ```
 
 启动后显示菜单：
@@ -91,7 +101,8 @@ python download_images.py
 
 ## 文件说明
 
-- `download_images.py` — 主程序
-- `config.json` — 请求头与 Cookie 配置
+- `download_images_zh.py` — 主程序（中文）
+- `download_images_en.py` — 主程序（英文）
+- `config.json` — 请求头与 Cookie 配置（中英双语说明）
 - `failed_urls.txt` — 下载失败的链接日志（运行后生成）
 - `assets/` — 图片输出目录（在 md 文件所在目录下自动创建）
