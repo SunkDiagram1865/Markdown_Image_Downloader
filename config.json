@@ -1,0 +1,51 @@
+{
+    "_说明": "请求头与 Cookie 配置文件。本文件被 download_images.py 自动读取。",
+    "_用法": [
+        "1. headers: 对所有请求生效的通用请求头（User-Agent 默认已设置，可在此覆盖）",
+        "2. cookies: 对所有请求生效的 Cookie，格式为 'key1=val1; key2=val2'",
+        "3. per_host: 按域名定制请求头和 Cookie，会覆盖通用设置（如新浪图床的 Referer）",
+        "4. 字段均可留空，不影响程序运行",
+        "5. 修改本文件后无需重启，下次下载时自动重新读取"
+    ],
+
+    "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"
+    },
+
+    "cookies": "",
+
+    "per_host": {
+        "sinaimg.cn": {
+            "headers": {
+                "Referer": "https://weibo.com/"
+            },
+            "cookies": ""
+        },
+        "weibo.com": {
+            "headers": {
+                "Referer": "https://weibo.com/"
+            },
+            "cookies": ""
+        },
+        "zhihu.com": {
+            "headers": {
+                "Referer": "https://www.zhihu.com/"
+            },
+            "cookies": ""
+        },
+        "jianshu.com": {
+            "headers": {
+                "Referer": "https://www.jianshu.com/"
+            },
+            "cookies": ""
+        },
+        "csdnimg.cn": {
+            "headers": {
+                "Referer": "https://blog.csdn.net/"
+            },
+            "cookies": ""
+        }
+    }
+}
