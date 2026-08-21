@@ -114,6 +114,35 @@ def unique_filename(url):
     return name + ext_from_url(url)
 
 
+def is_image_data(data):
+    """通过文件头 magic bytes 判断数据是否为图片，避免把 HTML 错误页当图片存"""
+    if not data or len(data) < 12:
+        return False
+    # PNG: 89 50 4E 47
+    if data[:4] == b'\x89PNG':
+        return True
+    # JPEG: FF D8 FF
+    if data[:3] == b'\xff\xd8\xff':
+        return True
+    # GIF: GIF87a / GIF89a
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return True
+    # WebP / RIFF container: RIFF....WEBP
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return True
+    # BMP: BM
+    if data[:2] == b'BM':
+        return True
+    # ICO: 00 00 01 00
+    if data[:4] == b'\x00\x00\x01\x00':
+        return True
+    # SVG (文本): 以 <svg 或 <?xml 开头（宽进，可能误判，但通常可接受）
+    head = data[:512].lstrip()
+    if head.startswith(b'<svg') or head.startswith(b'<?xml') and b'<svg' in data[:1024]:
+        return True
+    return False
+
+
 def download_image(url, assets_dir, cfg):
     """下载单个图片到指定 assets_dir，返回本地文件名（不含目录）"""
     filename = unique_filename(url)
@@ -128,6 +157,10 @@ def download_image(url, assets_dir, cfg):
         req = Request(url, headers=headers)
         with urlopen(req, timeout=30) as resp:
             data = resp.read()
+        # 校验响应数据是否真的是图片，防止把 HTML 错误页（如百度 404 页）当图片保存
+        if not is_image_data(data):
+            print(f'下载失败: {url}  错误: 响应内容不是图片（可能是失效链接或错误页）')
+            return None
         with open(filepath, 'wb') as f:
             f.write(data)
         print(f'下载成功: {url} -> {filepath} ({len(data)} bytes)')

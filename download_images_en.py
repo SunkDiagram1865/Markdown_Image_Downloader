@@ -114,6 +114,35 @@ def unique_filename(url):
     return name + ext_from_url(url)
 
 
+def is_image_data(data):
+    """Check magic bytes to verify the data is an image (avoid saving HTML error pages as images)."""
+    if not data or len(data) < 12:
+        return False
+    # PNG: 89 50 4E 47
+    if data[:4] == b'\x89PNG':
+        return True
+    # JPEG: FF D8 FF
+    if data[:3] == b'\xff\xd8\xff':
+        return True
+    # GIF: GIF87a / GIF89a
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return True
+    # WebP / RIFF container: RIFF....WEBP
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return True
+    # BMP: BM
+    if data[:2] == b'BM':
+        return True
+    # ICO: 00 00 01 00
+    if data[:4] == b'\x00\x00\x01\x00':
+        return True
+    # SVG (text): starts with <svg or <?xml containing <svg
+    head = data[:512].lstrip()
+    if head.startswith(b'<svg') or head.startswith(b'<?xml') and b'<svg' in data[:1024]:
+        return True
+    return False
+
+
 def download_image(url, assets_dir, cfg):
     """Download a single image to assets_dir; return the local filename (without directory)."""
     filename = unique_filename(url)
@@ -128,6 +157,10 @@ def download_image(url, assets_dir, cfg):
         req = Request(url, headers=headers)
         with urlopen(req, timeout=30) as resp:
             data = resp.read()
+        # Verify the response is actually an image (avoid saving HTML error pages like Baidu 404)
+        if not is_image_data(data):
+            print(f'Failed: {url}  error: response is not an image (likely a dead link or error page)')
+            return None
         with open(filepath, 'wb') as f:
             f.write(data)
         print(f'Downloaded: {url} -> {filepath} ({len(data)} bytes)')
