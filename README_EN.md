@@ -8,14 +8,16 @@ Interactive tool that scans Markdown documents for `![alt](https://...)` image l
 
 ## Features
 
-- Interactive menu: process a single file, a folder (recursive), or rewrite links
+- Interactive menu: process a single file, a folder (recursive), rewrite links, or rename local images
 - Regex matching for all https image links in Markdown
 - Auto-creates `./assets` directory (in the md file's directory) if missing
 - Unique filenames via URL md5 hash — no overwrites, no duplicate downloads
+- Baidu image-bed auto-fallback: when a `*.baidu.com` link fails, automatically parses the `src=` parameter to recover the original image URL and retries
 - `config.json` support for custom headers and cookies (bypass anti-leech)
 - Already-downloaded images are skipped (incremental updates)
 - Failed links are logged to `failed_urls.txt` for manual review
 - Option 3 rewrites `https://...` to `./assets/xxx` without downloading
+- Option 4 renames local images to the program's md5 hash naming format
 
 ## Requirements
 
@@ -43,6 +45,7 @@ The menu appears on launch:
 1. Specify file(s)    (download to ./assets next to the md)
 2. Specify folder     (recursive scan)
 3. Replace https links with ./assets paths (no download)
+4. Rename images      (rename local images to md5 hash format)
 0. Exit
 ==============================================
 ```
@@ -58,6 +61,20 @@ Enter a folder path. All `.md` files in the folder and its subdirectories are sc
 ### Option 3: Replace https links with ./assets paths
 
 Enter a file or folder path. Markdown `https://...` links are rewritten to `./assets/xxx` local paths **without downloading**. The original file is updated in place. Filename generation matches the download logic, so you can rewrite links first and download later.
+
+### Option 4: Rename images
+
+Enter local image file path(s) (drag and drop into terminal is supported; multiple paths space-separated). The program renames each file to the md5 hash format (e.g. `Snipaste_2026-08-21_14-58-41.png` → `3a7b980484bfd3d3.png`). Files are renamed in place.
+
+## Baidu Image-Bed Auto-Fallback
+
+When downloading a Baidu image-bed link (`*.baidu.com`) fails (network error or HTML error page returned), the program automatically parses the `src=` parameter in the URL to recover the original image URL and retries the download with it.
+
+Supported `src=` locations:
+- Embedded in path: `/image_search/src=<encoded URL>&refer=...` (most common)
+- Query parameter: `?src=<encoded URL>&...` (also supports `srcUrl` / `src_url` keys)
+
+The encoded value is decoded with up to two layers of `unquote` to handle double percent-encoding. On fallback, `per_host` rules are re-matched against the original link's domain, automatically applying the correct `Referer` and `Cookie`.
 
 ## Configuration file: config.json
 

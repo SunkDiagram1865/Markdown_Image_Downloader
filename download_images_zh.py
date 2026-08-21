@@ -430,11 +430,61 @@ def option_replace_urls():
     print('\n全部完成')
 
 
+def option_rename_images():
+    """选项 4：将本地图片重命名为程序命名格式（md5 哈希）
+
+    用途：把用户自己的截图文件（如 Snipaste_2026-08-21_14-58-41.png）
+    重命名为程序下载时使用的 md5 命名格式（如 324588ab6340f52c.png）。
+    """
+    raw = input('请输入图片文件路径（多个用空格分隔，可直接拖入）: ').strip()
+    if not raw:
+        print('未输入路径')
+        return
+    paths = parse_paths(raw)
+    if not paths:
+        print('未解析到有效路径')
+        return
+
+    renamed = 0
+    for old_path in paths:
+        if not os.path.isfile(old_path):
+            print(f'文件不存在: {old_path}')
+            continue
+
+        old_name = os.path.basename(old_path)
+        ext = os.path.splitext(old_name)[1].lower()
+
+        # 用文件名计算 md5，和程序用 URL 计算的逻辑一致
+        hash_name = hashlib.md5(old_name.encode('utf-8')).hexdigest()[:16]
+        new_name = hash_name + ext
+        new_path = os.path.join(os.path.dirname(old_path), new_name)
+
+        # 已经是目标格式则跳过
+        if old_name == new_name:
+            print(f'已经是目标格式，跳过: {old_name}')
+            continue
+
+        # 同目录下已有同名文件，追加序号
+        if os.path.exists(new_path):
+            i = 2
+            while os.path.exists(os.path.join(os.path.dirname(old_path), f'{hash_name}_{i}{ext}')):
+                i += 1
+            new_name = f'{hash_name}_{i}{ext}'
+            new_path = os.path.join(os.path.dirname(old_path), new_name)
+
+        os.rename(old_path, new_path)
+        print(f'已重命名: {old_name} -> {new_name}')
+        renamed += 1
+
+    print(f'\n完成: 共重命名 {renamed} 个文件')
+
+
 def show_menu():
     print('\n========== Markdown 图片下载器 ==========')
     print('1. 指定文件       (下载图片到 md 所在目录的 ./assets)')
     print('2. 指定文件夹     (递归扫描子目录)')
     print('3. 替换 https 链接为 ./assets 路径 (不下载)')
+    print('4. 图片重命名       (将本地图片重命名为 md5 哈希格式)')
     print('0. 退出')
     print('==========================================')
 
@@ -446,7 +496,7 @@ def main():
 
     while True:
         show_menu()
-        choice = input('请选择 [0-3]: ').strip()
+        choice = input('请选择 [0-4]: ').strip()
 
         if choice == '1':
             # 每次执行前重新读取，方便运行中修改 config.json
@@ -457,6 +507,8 @@ def main():
             option_download_folder(cfg)
         elif choice == '3':
             option_replace_urls()
+        elif choice == '4':
+            option_rename_images()
         elif choice == '0':
             print('再见')
             break

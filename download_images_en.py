@@ -428,11 +428,61 @@ def option_replace_urls():
     print('\nAll done')
 
 
+def option_rename_images():
+    """Option 4: rename local images to the program naming format (md5 hash).
+
+    Renames user screenshot files (e.g. Snipaste_2026-08-21_14-58-41.png)
+    to the md5 hash format used by the downloader (e.g. 324588ab6340f52c.png).
+    """
+    raw = input('Enter image file path(s) (space-separated, drag and drop supported): ').strip()
+    if not raw:
+        print('No path entered')
+        return
+    paths = parse_paths(raw)
+    if not paths:
+        print('No valid paths parsed')
+        return
+
+    renamed = 0
+    for old_path in paths:
+        if not os.path.isfile(old_path):
+            print(f'File not found: {old_path}')
+            continue
+
+        old_name = os.path.basename(old_path)
+        ext = os.path.splitext(old_name)[1].lower()
+
+        # md5 of filename, consistent with how the program uses md5 of URL
+        hash_name = hashlib.md5(old_name.encode('utf-8')).hexdigest()[:16]
+        new_name = hash_name + ext
+        new_path = os.path.join(os.path.dirname(old_path), new_name)
+
+        # Skip if already in target format
+        if old_name == new_name:
+            print(f'Already in target format, skipped: {old_name}')
+            continue
+
+        # Append suffix if name collision in the same directory
+        if os.path.exists(new_path):
+            i = 2
+            while os.path.exists(os.path.join(os.path.dirname(old_path), f'{hash_name}_{i}{ext}')):
+                i += 1
+            new_name = f'{hash_name}_{i}{ext}'
+            new_path = os.path.join(os.path.dirname(old_path), new_name)
+
+        os.rename(old_path, new_path)
+        print(f'Renamed: {old_name} -> {new_name}')
+        renamed += 1
+
+    print(f'\nDone: renamed {renamed} file(s)')
+
+
 def show_menu():
     print('\n========== Markdown Image Downloader ==========')
     print('1. Specify file(s)    (download to ./assets next to the md)')
     print('2. Specify folder     (recursive scan)')
     print('3. Replace https links with ./assets paths (no download)')
+    print('4. Rename images      (rename local images to md5 hash format)')
     print('0. Exit')
     print('==============================================')
 
@@ -444,7 +494,7 @@ def main():
 
     while True:
         show_menu()
-        choice = input('Choose [0-3]: ').strip()
+        choice = input('Choose [0-4]: ').strip()
 
         if choice == '1':
             # Re-read before each run so config.json edits take effect without restarting
@@ -455,6 +505,8 @@ def main():
             option_download_folder(cfg)
         elif choice == '3':
             option_replace_urls()
+        elif choice == '4':
+            option_rename_images()
         elif choice == '0':
             print('Bye')
             break
