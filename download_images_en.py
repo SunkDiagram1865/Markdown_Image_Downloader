@@ -250,9 +250,15 @@ def replace_urls_in_markdown(md_path, url_to_local):
         print(f'No changes: {md_path}')
         return
 
+    # Back up the original file as .md.bak before rewriting, so a failed rewrite can be reverted
+    bak_path = md_path + '.bak'
+    with open(bak_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write(new_content)
     print(f'Replaced {len(url_to_local)} links: {md_path}')
+    print(f'Backed up original: {bak_path}')
 
 
 def option_download_files(cfg):

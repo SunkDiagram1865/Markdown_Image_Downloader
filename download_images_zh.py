@@ -250,9 +250,15 @@ def replace_urls_in_markdown(md_path, url_to_local):
         print(f'无变更: {md_path}')
         return
 
+    # 替换前先备份原文件为 .md.bak，避免替换出错无法恢复
+    bak_path = md_path + '.bak'
+    with open(bak_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write(new_content)
     print(f'已替换 {len(url_to_local)} 个链接: {md_path}')
+    print(f'已备份原文件: {bak_path}')
 
 
 def option_download_files(cfg):
