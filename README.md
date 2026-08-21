@@ -1,5 +1,7 @@
 # Markdown 图片下载器
 
+[English](./README_EN.md) | 简体中文
+
 交互式工具，扫描 Markdown 文档中的 `![alt](https://...)` 图片链接，下载到 `./assets` 目录，可选把链接替换为本地路径。
 
 ## 功能
