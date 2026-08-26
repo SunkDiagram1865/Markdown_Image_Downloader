@@ -2,21 +2,24 @@
 
 English | [简体中文](./README.md)
 
-Interactive tool that scans Markdown documents for `![alt](https://...)` image links, downloads them to a local `./assets` directory, and optionally rewrites the links to local paths.
+Interactive tool that scans Markdown documents for both `![alt](https://...)` syntax and HTML `<img src="https://...">` tags, downloads them to a local `./assets` directory, and optionally rewrites the links to local paths.
 
 > Main program language: [English download_images_en.py](./download_images_en.py) | [Chinese download_images_zh.py](./download_images_zh.py)
 
 ## Features
 
 - Interactive menu: process a single file, a folder (recursive), rewrite links, or rename local images
-- Regex matching for all https image links in Markdown
+- Regex matching for all https image links — both Markdown syntax (`![alt](url)`) and HTML `<img src="url">` tags
+  - Supports both double-quoted `src="..."` and single-quoted `src='...'` attributes
+  - Case-insensitive matching (`<IMG SRC=...>`), self-closing `<img ... />`, and `src` can appear anywhere in the attribute list
+  - When rewriting links, only the `src` value is replaced — `alt`, `style`, `class`, `width` and other attributes are preserved verbatim
 - Auto-creates `./assets` directory (in the md file's directory) if missing
 - Unique filenames via URL md5 hash — no overwrites, no duplicate downloads
 - Baidu image-bed auto-fallback: when a `*.baidu.com` link fails, automatically parses the `src=` parameter to recover the original image URL and retries
 - `config.json` support for custom headers and cookies (bypass anti-leech)
 - Already-downloaded images are skipped (incremental updates)
 - Failed links are logged to `failed_urls.txt` for manual review
-- Option 3 rewrites `https://...` to `./assets/xxx` without downloading
+- Option 3 rewrites both Markdown and HTML image links to `./assets/xxx` without downloading
 - Option 4 renames local images to the program's md5 hash naming format
 
 ## Requirements
@@ -52,15 +55,15 @@ The menu appears on launch:
 
 ### Option 1: Specify file(s)
 
-Enter one or more md file paths (space-separated; quote paths containing spaces). Images are downloaded to an `assets/` folder created next to each md file.
+Enter one or more md file paths (space-separated; quote paths containing spaces). Both Markdown image syntax and HTML `<img>` tags are scanned; https images are downloaded to an `assets/` folder created next to each md file.
 
 ### Option 2: Specify folder
 
-Enter a folder path. All `.md` files in the folder and its subdirectories are scanned and images downloaded.
+Enter a folder path. All `.md` files in the folder and its subdirectories are scanned (both Markdown and HTML `<img>` formats) and images downloaded.
 
 ### Option 3: Replace https links with ./assets paths
 
-Enter a file or folder path. Markdown `https://...` links are rewritten to `./assets/xxx` local paths **without downloading**. The original file is updated in place. Filename generation matches the download logic, so you can rewrite links first and download later.
+Enter a file or folder path. Both Markdown `https://...` links and HTML `<img src=...>` tags are rewritten to `./assets/xxx` local paths **without downloading**. The original file is updated in place. For HTML tags, only the `src` value is rewritten — `alt`, `style` and other attributes are preserved unchanged. Filename generation matches the download logic, so you can rewrite links first and download later.
 
 ### Option 4: Rename images
 
@@ -108,13 +111,19 @@ Input `note.md`:
 
 ```markdown
 ![image](https://example.com/a.png)
+
+<img src="https://example.com/b.png" alt="diagram" style="zoom:75%;" />
 ```
 
 After running option 3:
 
 ```markdown
 ![image](./assets/3f8a9b2c1d4e5f6a.png)
+
+<img src="./assets/8e5c1d7d0c4a9c0c.png" alt="diagram" style="zoom:75%;" />
 ```
+
+For HTML tags, `alt`, `style` and other attributes are preserved — only `src` is replaced with the local path.
 
 ## Files
 
