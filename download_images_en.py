@@ -9,6 +9,15 @@ from urllib.request import Request, urlopen
 # Match markdown image syntax ![alt](https://...)
 IMAGE_PATTERN = re.compile(r'!\[([^\]]*)\]\((https://[^)]+)\)')
 
+# Match HTML <img src="https://..."> / <img src='https://...'>
+# group(1): prefix up to and including src=" / src='
+# group(2): https URL
+# group(3): suffix from closing quote through >
+HTML_IMG_PATTERN = re.compile(
+    r'(<img\b[^>]*?\bsrc\s*=\s*["\'])(https://[^"\']+)(["\'][^>]*>)',
+    re.IGNORECASE | re.DOTALL
+)
+
 # Directory of this Python script (used for failed_urls.txt, config.json)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -106,6 +115,23 @@ def ext_from_url(url):
     if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'):
         return ext
     return '.png'
+
+
+def extract_image_urls(content):
+    """Extract both markdown ![alt](url) and HTML <img src=url> links from md content (deduplicated, in appearance order)."""
+    urls = []
+    seen = set()
+    for m in IMAGE_PATTERN.finditer(content):
+        url = m.group(2)
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+    for m in HTML_IMG_PATTERN.finditer(content):
+        url = m.group(2)
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
 
 
 def unique_filename(url):
@@ -274,18 +300,15 @@ def process_markdown(md_path, cfg):
     with open(md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    urls = [m.group(2) for m in IMAGE_PATTERN.finditer(content)]
+    # Extract both markdown image links and HTML <img src=...> links
+    md_urls = [m.group(2) for m in IMAGE_PATTERN.finditer(content)]
+    html_urls = [m.group(2) for m in HTML_IMG_PATTERN.finditer(content)]
+    urls = md_urls + html_urls
     if not urls:
         print('No https:// image links found')
         return
 
-    # Deduplicate while preserving order
-    seen = set()
-    unique_urls = []
-    for u in urls:
-        if u not in seen:
-            seen.add(u)
-            unique_urls.append(u)
+    unique_urls = extract_image_urls(content)
 
     assets_dir = assets_dir_for(md_path)
     ensure_assets_dir(assets_dir)
@@ -321,7 +344,7 @@ def replace_urls_in_markdown(md_path, url_to_local):
     with open(md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    def repl(m):
+    def md_repl(m):
         alt = m.group(1)
         url = m.group(2)
         local = url_to_local.get(url)
@@ -329,7 +352,17 @@ def replace_urls_in_markdown(md_path, url_to_local):
             return f'![{alt}]({local})'
         return m.group(0)
 
-    new_content = IMAGE_PATTERN.sub(repl, content)
+    def html_repl(m):
+        prefix = m.group(1)   # e.g. <img ... src="
+        url = m.group(2)      # https://xxx.png
+        suffix = m.group(3)   # " ...>
+        local = url_to_local.get(url)
+        if local:
+            return prefix + local + suffix
+        return m.group(0)
+
+    new_content = IMAGE_PATTERN.sub(md_repl, content)
+    new_content = HTML_IMG_PATTERN.sub(html_repl, new_content)
     if new_content == content:
         print(f'No changes: {md_path}')
         return
@@ -405,18 +438,10 @@ def option_replace_urls():
         with open(md_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        urls = [m.group(2) for m in IMAGE_PATTERN.finditer(content)]
-        if not urls:
+        unique_urls = extract_image_urls(content)
+        if not unique_urls:
             print(f'\nNo https image links: {md_path}')
             continue
-
-        # Deduplicate
-        seen = set()
-        unique_urls = []
-        for u in urls:
-            if u not in seen:
-                seen.add(u)
-                unique_urls.append(u)
 
         # Build url -> ./assets/xxx mapping (no download, path only)
         url_to_local = {url: './assets/' + unique_filename(url) for url in unique_urls}

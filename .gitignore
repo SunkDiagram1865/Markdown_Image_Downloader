@@ -1,0 +1,11 @@
+# 忽略 Python 缓存文件
+__pycache__/
+*.pyc
+*.pyo
+
+# 忽略临时文本文件
+failed_urls.txt
+RELEASE.md
+
+# 或者忽略所有 .txt 文件（如果不需要）
+# *.txt

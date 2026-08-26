@@ -9,6 +9,15 @@ from urllib.request import Request, urlopen
 # 匹配 markdown 图片语法 ![alt](https://...)
 IMAGE_PATTERN = re.compile(r'!\[([^\]]*)\]\((https://[^)]+)\)')
 
+# 匹配 HTML <img src="https://..."> / <img src='https://...'>
+# group(1): 前缀（含 src=" 或 src='）
+# group(2): https URL
+# group(3): 后缀（含闭合引号到 >）
+HTML_IMG_PATTERN = re.compile(
+    r'(<img\b[^>]*?\bsrc\s*=\s*["\'])(https://[^"\']+)(["\'][^>]*>)',
+    re.IGNORECASE | re.DOTALL
+)
+
 # Python 脚本所在目录（用于存放 failed_urls.txt、config.json）
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -106,6 +115,23 @@ def ext_from_url(url):
     if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'):
         return ext
     return '.png'
+
+
+def extract_image_urls(content):
+    """从 md 内容中同时提取 markdown 图片链接和 HTML <img src=...> 链接（去重并保持出现顺序）"""
+    urls = []
+    seen = set()
+    for m in IMAGE_PATTERN.finditer(content):
+        url = m.group(2)
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+    for m in HTML_IMG_PATTERN.finditer(content):
+        url = m.group(2)
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
 
 
 def unique_filename(url):
@@ -276,18 +302,15 @@ def process_markdown(md_path, cfg):
     with open(md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    urls = [m.group(2) for m in IMAGE_PATTERN.finditer(content)]
+    # 同时提取 markdown 图片链接和 HTML <img src=...> 链接
+    md_urls = [m.group(2) for m in IMAGE_PATTERN.finditer(content)]
+    html_urls = [m.group(2) for m in HTML_IMG_PATTERN.finditer(content)]
+    urls = md_urls + html_urls
     if not urls:
         print('未找到 https:// 开头的图片链接')
         return
 
-    # 去重但保持顺序
-    seen = set()
-    unique_urls = []
-    for u in urls:
-        if u not in seen:
-            seen.add(u)
-            unique_urls.append(u)
+    unique_urls = extract_image_urls(content)
 
     assets_dir = assets_dir_for(md_path)
     ensure_assets_dir(assets_dir)
@@ -323,7 +346,7 @@ def replace_urls_in_markdown(md_path, url_to_local):
     with open(md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    def repl(m):
+    def md_repl(m):
         alt = m.group(1)
         url = m.group(2)
         local = url_to_local.get(url)
@@ -331,7 +354,17 @@ def replace_urls_in_markdown(md_path, url_to_local):
             return f'![{alt}]({local})'
         return m.group(0)
 
-    new_content = IMAGE_PATTERN.sub(repl, content)
+    def html_repl(m):
+        prefix = m.group(1)   # e.g. <img ... src="
+        url = m.group(2)      # https://xxx.png
+        suffix = m.group(3)   # " ...>
+        local = url_to_local.get(url)
+        if local:
+            return prefix + local + suffix
+        return m.group(0)
+
+    new_content = IMAGE_PATTERN.sub(md_repl, content)
+    new_content = HTML_IMG_PATTERN.sub(html_repl, new_content)
     if new_content == content:
         print(f'无变更: {md_path}')
         return
@@ -407,18 +440,10 @@ def option_replace_urls():
         with open(md_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        urls = [m.group(2) for m in IMAGE_PATTERN.finditer(content)]
-        if not urls:
+        unique_urls = extract_image_urls(content)
+        if not unique_urls:
             print(f'\n无 https 图片链接: {md_path}')
             continue
-
-        # 去重
-        seen = set()
-        unique_urls = []
-        for u in urls:
-            if u not in seen:
-                seen.add(u)
-                unique_urls.append(u)
 
         # 构建 url -> ./assets/xxx 映射（不下载，仅生成路径）
         url_to_local = {url: './assets/' + unique_filename(url) for url in unique_urls}
